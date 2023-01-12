@@ -164,6 +164,7 @@ struct ExecutionEnv {
     memory: [MemBlock; 32768],
     registers: [MemBlock; 8],
     curr_point: Mem,
+    line_buffer: String
 }
 
 impl ExecutionEnv {
@@ -173,6 +174,7 @@ impl ExecutionEnv {
             memory: [0u16; 32768],
             registers: [0u16; 8],
             curr_point: 0.into(),
+            line_buffer: Default::default()
         };
 
         assert_eq!(content.len() % 2, 0, "Input is not 16-bit multiple");
@@ -205,8 +207,8 @@ impl ExecutionEnv {
         };
         // let v: Val = rv.try_into().unwrap();
         // assert!()
-        eprintln!("Resolve: {:?} -> {}", v, rv);
-        eprintln!("Registers: {:?}", self.registers);
+        // eprintln!("Resolve: {:?} -> {}", v, rv);
+        // eprintln!("Registers: {:?}", self.registers);
         Ok(rv)
     }
 
@@ -230,8 +232,8 @@ impl ExecutionEnv {
     pub fn run_op(&mut self, op: Op) -> anyhow::Result<bool> {
         use Op::*;
         let mut jump_pos: Option<Mem> = None;
-        eprintln!("OPERATION: {:?}", &op);
-        eprintln!("Registers Before Op: {:?}", self.registers);
+        // eprintln!("OPERATION: {:?}", &op);
+        // eprintln!("Registers Before Op: {:?}", self.registers);
 
         match &op {
             Halt => {return Ok(true);},
@@ -330,7 +332,7 @@ impl ExecutionEnv {
                 // self.set_mem(*addr,  (bit_not(a)).into())?;
             },
             Rmem(addr, a) => {
-                dbg!(addr, a);
+                // dbg!(addr, a);
                 let m = match a {
                     Addr::Mem(x) => {
                         let x: u15 = *x;
@@ -341,7 +343,7 @@ impl ExecutionEnv {
                         self.memory[x.to_usize()]
                     }
                 };
-                dbg!(m);
+                // dbg!(m);
                 self.set_mem(*addr,  m)?;
             },
             Wmem(addr, a) => {
@@ -373,6 +375,10 @@ impl ExecutionEnv {
                     },
                     None => return Ok(true)
                 }
+            },
+            In(x) => {
+                let v = self.read_one_stdin();
+                self.set_mem(*x, v? as u16)?;
             }
             // _ => todo!(),
            
@@ -417,10 +423,19 @@ impl ExecutionEnv {
                 self.curr_point = x;
             }
         }
-        eprintln!("Registers After Op: {:?}", self.registers);
-        eprintln!("====================>");
+        // eprintln!("Registers After Op: {:?}", self.registers);
+        // eprintln!("====================>");
 
         return Ok(false);
+    }
+
+    pub fn read_one_stdin(&mut self) -> anyhow::Result<char> {
+        if self.line_buffer.len() == 0 {
+            let mut read_buf = String::new();
+            std::io::stdin().read_line(&mut read_buf)?;
+            self.line_buffer = read_buf.chars().rev().collect();
+        }
+        Ok(self.line_buffer.pop().unwrap())
     }
 }
 
@@ -510,7 +525,7 @@ impl Op {
         // let a: Val = val[1].try_into().ok().context("a")?;
         // let a: Val = val[2].try_into().ok().context("b")?;
         // let b: Mem = val[1].try_into()?;
-        eprintln!("Values: {:?}", val);
+        // eprintln!("Values: {:?}", val);
         return Ok(match val[0] {
             0 => Self::Halt,
             1 => Self::Set(val[1].try_into()?, val[2].try_into()?),
