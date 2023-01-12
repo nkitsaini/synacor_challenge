@@ -1,0 +1,3 @@
+[submodule "uX"]
+	path = uX
+	url = https://github.com/kjetilkjeka/uX.git
