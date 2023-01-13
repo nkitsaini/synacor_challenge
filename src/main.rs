@@ -75,18 +75,12 @@ impl From<Addr> for Val {
 type Num = u15;
 type Mem = u15;
 type MemBlock = u16;
-type RegBlock = u16;
 
 #[derive(Debug, Clone, Copy)]
 enum Addr {
     Reg(Reg), // 0..7
     Mem(Mem), // 15-bit
 }
-
-// impl std::error::Error for ux::conversion::TryFromIntError {
-//     fnn
-// }
-
 
 impl TryFrom<u16> for Addr {
     type Error = anyhow::Error;

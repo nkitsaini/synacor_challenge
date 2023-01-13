@@ -1,0 +1,17 @@
+doorway (Tablet)
+north
+north
+bridge
+continue
+down
+west (Empty Lantern on east)
+passage
+----------- (ladder -> north -> north -> north -> passage)
+----------- (ladder -> east -> east (hopeless darkness, eaten))
+darkness
+continue
+forward
+investigate
+
+
+~
