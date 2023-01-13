@@ -1,9 +1,119 @@
-doorway (Tablet)
+9 + 2 * 5 ^2 + 7 ^3 - 3 = 399
+
+o
+
+take tablet
+doorway
 north
 north
 bridge
 continue
 down
+east
+take empty lantern
+west
+west
+passage
+ladder
+west
+south
+north
+take can
+west
+use can
+use lantern
+ladder
+darkness
+continue
+west
+west
+west
+west
+north
+take red coin
+north
+east
+take concave coin
+down
+take corroded coin
+up
+west
+west
+take blue coin
+up
+take shiny coin
+down
+east
+use blue coin
+use red coin
+use shiny coin
+use concave coin
+use corroded coin
+north
+take teleporter
+use teleporter
+take business card
+take strange book
+inv
+look
+
+
+
+N NO
+S NO 
+EN
+ES NO
+EW NO
+EE NO
+
+
+W -> S -> N
+
+darkness
+continue
+forward
+run
+hide
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ (Tablet)
+--- 
+take tablet
+doorway
+north
+north
+bridge
+continue
+down
+east
+take empty lantern
+west
+west
+passage
+--- 
 west (Empty Lantern on east)
 passage
 ----------- (ladder -> north -> north -> north -> passage)
