@@ -59,7 +59,7 @@ fn main() -> anyhow::Result<()> {
 
     loop {
         history.lock().unwrap().clear();
-        let mut env = vm::ExecutionEnv::new(bytes, env_screen);
+        let mut env = vm::ExecutionEnv::new(bytes, env_screen, None);
         env.run()?;
         env_screen = env.screen;
         std::thread::sleep(std::time::Duration::from_millis(100));

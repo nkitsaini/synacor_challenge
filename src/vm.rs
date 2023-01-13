@@ -158,7 +158,8 @@ pub struct ExecutionEnv {
     pub(crate) memory: [MemBlock; 32768],
     pub(crate) registers: [MemBlock; 8],
     pub(crate) curr_point: Mem,
-    pub(crate) screen: Screen
+    pub(crate) screen: Screen,
+	pub(crate) register_8_preset: Option<u16>
 }
 
 pub struct Screen {
@@ -197,13 +198,14 @@ impl Screen {
 }
 
 impl ExecutionEnv {
-    pub fn new(content: &[u8], screen: Screen) -> Self {
+    pub fn new(content: &[u8], screen: Screen, register_preset: Option<u16>) -> Self {
         let mut rv = Self {
             stack: vec![],
             memory: [0u16; 32768],
             registers: [0u16; 8],
             curr_point: 0.into(),
-            screen: screen
+            screen: screen,
+			register_8_preset: register_preset
         };
 
         assert_eq!(content.len() % 2, 0, "Input is not 16-bit multiple");
@@ -257,12 +259,46 @@ impl ExecutionEnv {
         }
         Ok(())
     }
+	
+    pub fn check_teleporter(&mut self) -> anyhow::Result<bool> {
+        loop {
+            let mut values = [0u16; 4];
+            for i in (self.curr_point.to_usize())
+                ..(self.memory.len().min(self.curr_point.to_usize() + 4))
+            {
+                values[i - self.curr_point.to_usize()] = self.memory[i];
+            }
+            let op = Op::parse(values)?;
+            if self.run_op(op)? {
+				if let Op::Call(x) = op {
+					return Ok(false)
+
+				}
+            };
+        }
+        Ok(false)
+    }
 
     fn run_op(&mut self, op: Op) -> anyhow::Result<bool> {
         use Op::*;
         let mut jump_pos: Option<Mem> = None;
-        // eprintln!("OPERATION: {:?}", &op);
+		if let Op::Call(x) = &op {
+			// dbg!("Call", x);
+			if let Val::Num(a) = *x {
+				let b: u16 = a.into();
+				if b == 6027 {
+					// panic!("got");
+					return Ok(true);
+				}
+			}
+		}
+
+		// } else {
+			// eprintln!("OPERATION: {:?}", &op);
+		// }
         // eprintln!("Registers Before Op: {:?}", self.registers);
+		// assert_eq!(self.registers[7], 0);
+		// self.registers[7] = 1;
 
         match &op {
             Halt => {return Ok(true);},
@@ -407,40 +443,12 @@ impl ExecutionEnv {
                 }
             },
             In(x) => {
+				if let Some(x) = self.register_8_preset {
+					self.registers[7] = x;
+				}
                 let v = self.screen.get_char()?;
                 self.set_mem(*x, v as u16)?;
             }
-            // _ => todo!(),
-           
-            _ => todo!()
-    // Add(Addr, Val, Val),
-    // /// 10: store into <a> the product of <b> and <c> (modulo 32768)
-    // Mult(Addr, Val, Val),
-    // /// 11: store into <a> the remainder of <b> divided by <c>
-    // Mod(Addr, Val, Val),
-    // /// 12: stores into <a> the bitwise and of <b> and <c>
-    // And(Addr, Val, Val),
-    // /// 13: stores into <a> the bitwise or of <b> and <c>
-    // Or(Addr, Val, Val),
-    // /// 14: stores 15-bit bitwise inverse of <b> in <a>
-    // Not(Addr, Val),
-    // /// 15: read memory at address <b> and write it to <a>
-    // Rmem(Addr, MemAddr),
-    // /// 16: write the value from <b> into memory at address <a>
-    // Wmem(MemAddr, Val),
-    // /// 17: write the address of the next instruction to the stack and jump to <a>
-    // Call(MemAddr),
-    // /// 18: remove the top element from the stack and jump to it; empty stack = halt
-    // Ret,
-    // /// 19: write the character represented by ascii code <a> to the terminal
-    // Out(Val),
-    // /// 20: read a character from the terminal and write its ascii code to <a>;
-    // /// it can be assumed that once input starts, it will continue until a newline is encountered;
-    // /// this means that you can safely read whole lines from the keyboard and trust
-    // /// that they will be fully read
-    // In(Addr),
-    // /// 21: no operation
-    // Noop,
 
         };
         match jump_pos {
@@ -634,6 +642,155 @@ fn bit_not(x: Num) -> Num {
 //     println!("a: {}, b: {}, c: {}, d: {}", a, b, c, d);
 //     assert!(false);
 // }
+#[test]
+fn register_finder() {
+	let values = [
+		"take tablet",
+		"doorway",
+		"north",
+		"north",
+		"bridge",
+		"continue",
+		"down",
+		"east",
+		"take empty lantern",
+		"west",
+		"west",
+		"passage",
+		"ladder",
+		"west",
+		"south",
+		"north",
+		"take can",
+		"west",
+		"use can",
+		"use lantern",
+		"ladder",
+		"darkness",
+		"continue",
+		"west",
+		"west",
+		"west",
+		"west",
+		"north",
+		"take red coin",
+		"north",
+		"east",
+		"take concave coin",
+		"down",
+		"take corroded coin",
+		"up",
+		"west",
+		"west",
+		"take blue coin",
+		"up",
+		"take shiny coin",
+		"down",
+		"east",
+		"use blue coin",
+		"use red coin",
+		"use shiny coin",
+		"use concave coin",
+		"use corroded coin",
+		"north",
+		"take teleporter",
+		"use teleporter",
+	];
+    let bytes = include_bytes!("../challenge.bin");
+	let (mut s1, mut s2) = Screen::create();
+	for register_val in 1..32768 {
+	// for register_val in 1..3 {
+		s1.reset().unwrap();
+		let mut ev = ExecutionEnv::new(bytes, s1, Some(register_val));
+		for k in &values {
+			let mut s = k.to_string();
+			s.push('\n');
+			s2.send(s).unwrap();
+		}
+		// s2.send(val)
+		dbg!(register_val);
+		match ev.check_teleporter() {
+			Ok(x) => { assert!(!x); },
+			Err(x) => unreachable!()
+		};
+		s1 = ev.screen;
+	}
+}
+
+#[test]
+fn register_finder2() {
+	let values = [
+		"take tablet",
+		"doorway",
+		"north",
+		"north",
+		"bridge",
+		"continue",
+		"down",
+		"east",
+		"take empty lantern",
+		"west",
+		"west",
+		"passage",
+		"ladder",
+		"west",
+		"south",
+		"north",
+		"take can",
+		"west",
+		"use can",
+		"use lantern",
+		"ladder",
+		"darkness",
+		"continue",
+		"west",
+		"west",
+		"west",
+		"west",
+		"north",
+		"take red coin",
+		"north",
+		"east",
+		"take concave coin",
+		"down",
+		"take corroded coin",
+		"up",
+		"west",
+		"west",
+		"take blue coin",
+		"up",
+		"take shiny coin",
+		"down",
+		"east",
+		"use blue coin",
+		"use red coin",
+		"use shiny coin",
+		"use concave coin",
+		"use corroded coin",
+		"north",
+		"take teleporter",
+		"use teleporter",
+	];
+    let bytes = include_bytes!("../challenge.bin");
+	let (mut s1, mut s2) = Screen::create();
+	for register_val in 16000..32768 {
+	// for register_val in 1..3 {
+		s1.reset().unwrap();
+		let mut ev = ExecutionEnv::new(bytes, s1, Some(register_val));
+		for k in &values {
+			let mut s = k.to_string();
+			s.push('\n');
+			s2.send(s).unwrap();
+		}
+		// s2.send(val)
+		dbg!(register_val);
+		match ev.check_teleporter() {
+			Ok(x) => { assert!(!x); },
+			Err(x) => unreachable!()
+		};
+		s1 = ev.screen;
+	}
+}
 #[cfg(test)]
 mod tests {
     use super::*;

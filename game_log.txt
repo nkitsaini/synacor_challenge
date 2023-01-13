@@ -1,6 +1,7 @@
 9 + 2 * 5 ^2 + 7 ^3 - 3 = 399
 
 o
+5605 -> location of code for default teleport
 
 take tablet
 doorway
