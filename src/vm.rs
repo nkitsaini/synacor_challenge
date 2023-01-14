@@ -1,7 +1,9 @@
 use core::num;
+use std::sync::mpsc::TryRecvError;
 use std::{ops::Mul, sync::mpsc::Receiver};
 use std::fs::File;
 use std::io::prelude::*;
+use serde::{Serialize, Deserialize};
 use ux::{u15, u3};
 use anyhow::{bail, Context};
 
@@ -153,13 +155,55 @@ impl TryFrom<u16> for Val {
     }
 }
 
+#[derive(Default, Serialize, Deserialize)]
+pub struct EnvSnapshot {
+    pub(crate) stack: Vec<MemBlock>,
+    // pub(crate) memory: [MemBlock; 32768],
+    pub(crate) memory: Vec<MemBlock>,
+    pub(crate) registers: [MemBlock; 8],
+    pub(crate) curr_point: u16,
+	pub(crate) register_8_preset: Option<u16>,
+    pub(crate) operation_count: u64
+}
+
+impl EnvSnapshot {
+	pub fn new(env: &ExecutionEnv) -> Self {
+		Self {
+			stack: env.stack.clone(),
+			memory: Vec::from_iter(env.memory.iter().cloned()),
+			registers: env.registers.clone(),
+			curr_point: env.curr_point.into(),
+			register_8_preset: env.register_8_preset,
+            operation_count: env.operation_count
+		}
+	}
+	pub fn to_json(&self) -> String {
+		serde_json::to_string(self).unwrap()
+	}
+	pub fn from_json(json: &str) -> anyhow::Result<Self> {
+		Ok(serde_json::from_str(json)?)
+	}
+	pub fn to_env(&self, screen: Screen) -> anyhow::Result<ExecutionEnv> {
+		Ok(ExecutionEnv {
+			stack: self.stack.clone(),
+			memory: self.memory.clone().try_into().ok().context("memory length not correct")?,
+			registers: self.registers.clone(),
+			curr_point: self.curr_point.try_into()?,
+			screen: screen,
+			register_8_preset: self.register_8_preset,
+            operation_count: self.operation_count
+		})
+	}
+}
+
 pub struct ExecutionEnv {
     pub(crate) stack: Vec<MemBlock>,
     pub(crate) memory: [MemBlock; 32768],
     pub(crate) registers: [MemBlock; 8],
     pub(crate) curr_point: Mem,
     pub(crate) screen: Screen,
-	pub(crate) register_8_preset: Option<u16>
+	pub(crate) register_8_preset: Option<u16>,
+    pub(crate) operation_count: u64
 }
 
 pub struct Screen {
@@ -189,6 +233,57 @@ impl Screen {
         }
         Ok(self.buffer.pop().unwrap())
     }
+    pub fn get_all(&mut self) -> anyhow::Result<String> {
+        let mut rv = self.buffer.clone();
+        loop {
+            match self.text_recv.try_recv() {
+                Err(TryRecvError::Disconnected) => {
+                    bail!("Disconnected screen get");
+                },
+                Err(TryRecvError::Empty) => {
+                    self.buffer = "".to_string();
+                    return Ok(rv)
+                }
+                Ok(x) => {
+                    rv += &x;
+                }
+            };
+        }
+        // while self.buffer.is_empty() {
+        //     let data = self.text_recv.recv()?;
+        //     self.buffer = data.chars().rev().collect();
+        // }
+        // Ok(self.buffer.pop().unwrap())
+    }
+    pub fn try_get_char(&mut self) -> anyhow::Result<Option<char>> {
+        while self.buffer.is_empty() {
+            match self.text_recv.try_recv() {
+				Err(TryRecvError::Disconnected) => {
+					bail!("Disconnected screen get");
+				},
+				Err(TryRecvError::Empty) => {
+					return Ok(None)
+				}
+				Ok(x) => {
+					self.buffer = x.chars().rev().collect();
+				}
+			};
+        }
+        Ok(Some(self.buffer.pop().unwrap()))
+    }
+
+	pub fn is_empty(&mut self) -> anyhow::Result<bool> {
+		let c = self.try_get_char()?;
+		match c {
+			Some(x) => {
+				self.buffer.push(x);
+				return Ok(false)
+			},
+			None => {
+				return Ok(true)
+			}
+		}
+	}
 
     /// consume all the strings in recv
     pub fn reset(&mut self) -> anyhow::Result<()> {
@@ -205,7 +300,8 @@ impl ExecutionEnv {
             registers: [0u16; 8],
             curr_point: 0.into(),
             screen: screen,
-			register_8_preset: register_preset
+			register_8_preset: register_preset,
+            operation_count: 0
         };
 
         assert_eq!(content.len() % 2, 0, "Input is not 16-bit multiple");
@@ -216,6 +312,11 @@ impl ExecutionEnv {
 
         rv
     }
+
+	pub fn snapshot(&self) -> EnvSnapshot {
+		EnvSnapshot::new(self)
+	}
+
     pub fn run(&mut self) -> anyhow::Result<()> {
         loop {
             let mut values = [0u16; 4];
@@ -269,6 +370,35 @@ impl ExecutionEnv {
                 values[i - self.curr_point.to_usize()] = self.memory[i];
             }
             let op = Op::parse(values)?;
+			if let Op::Call(x) = &op {
+				if let Val::Num(a) = *x {
+					let b: u16 = a.into();
+					if b == 6027 {
+						return Ok(false);
+					}
+				}
+			}
+            if self.run_op(op)? {
+				break
+            };
+        }
+        Ok(false)
+    }
+
+    pub fn run_until_empty(&mut self) -> anyhow::Result<bool> {
+        loop {
+            let mut values = [0u16; 4];
+            for i in (self.curr_point.to_usize())
+                ..(self.memory.len().min(self.curr_point.to_usize() + 4))
+            {
+                values[i - self.curr_point.to_usize()] = self.memory[i];
+            }
+            let op = Op::parse(values)?;
+			if let Op::In(x) = &op {
+				if self.screen.is_empty()? {
+					return Ok(false);
+				}
+			}
             if self.run_op(op)? {
 				if let Op::Call(x) = op {
 					return Ok(false)
@@ -282,19 +412,12 @@ impl ExecutionEnv {
     fn run_op(&mut self, op: Op) -> anyhow::Result<bool> {
         use Op::*;
         let mut jump_pos: Option<Mem> = None;
-		if let Op::Call(x) = &op {
-			// dbg!("Call", x);
-			if let Val::Num(a) = *x {
-				let b: u16 = a.into();
-				if b == 6027 {
-					// panic!("got");
-					return Ok(true);
-				}
-			}
-		}
 
+        self.operation_count += 1;
 		// } else {
-			// eprintln!("OPERATION: {:?}", &op);
+        eprintln!("OPERATION: {:?}", &op);
+        eprintln!("Registers: {:?}", &self.registers);
+        eprintln!("Count: {:?}", &self.operation_count);
 		// }
         // eprintln!("Registers Before Op: {:?}", self.registers);
 		// assert_eq!(self.registers[7], 0);
@@ -308,7 +431,7 @@ impl ExecutionEnv {
             Out(x) => {
                 let r  = self.resolve(*x)?;
                 self.screen.send_char(r as u8 as char)?;
-                // print!("{}", r as u8 as char);
+                eprint!("{}", r as u8 as char);
                 // std::io::stdout().flush()?;
             },
             Noop => { },
@@ -419,8 +542,8 @@ impl ExecutionEnv {
                 let mut faddr = *addr;
                 
                 let b: Val = (*addr).into();
-                let x = self.resolve(b)?;
-                let x: u15 = x.try_into()?;
+                let x6 = self.resolve(b)?;
+                let x: u15 = x6.try_into()?;
                 // let v = match addr {
                 //     Addr::Reg(r) => {
                 //         let x: u15 = self.resolve(Val::Reg(*r))?.try_into()?;
@@ -432,6 +555,8 @@ impl ExecutionEnv {
                 // dbg!(v);
                 // self.set_mem(Addr::Mem(*addr),  v)?;
                 // self.set_mem(*addr,  self.resolve(*a)?)?;
+                assert!((x6 as usize) < include_bytes!("../challenge.bin").len());
+
                 self.set_mem(Addr::Mem(x),  self.resolve(*a)?)?;
             },
             Ret => {
@@ -593,55 +718,10 @@ impl Op {
 }
 
 
-// fn main() -> anyhow::Result<()> {
-//     let bytes = include_bytes!("../challenge.bin");
-//     let (mut env_screen, screen) = Screen::create();
-
-//     let screen_recv = screen.text_recv;
-//     let screen_send = screen.text_send;
-//     let t1 = std::thread::spawn( move || {
-//         loop {
-//             let r = screen_recv.recv()?;
-//             print!("{}", r);
-//         }
-//         Ok(()) as anyhow::Result<()>
-//     });
-
-//     let t1 = std::thread::spawn( move || {
-//         loop {
-//             let mut read_buf = String::new();
-//             std::io::stdin().read_line(&mut read_buf)?;
-//             screen_send.send(read_buf)?;
-//         }
-//         Ok(()) as anyhow::Result<()>
-        
-//     });
-//     loop {
-//         let mut env = ExecutionEnv::new(bytes, env_screen);
-//         env.run()?;
-//         env_screen = env.screen;
-//         std::thread::sleep(std::time::Duration::from_millis(100));
-//         println!("\n=================>");
-//         println!("=================> You died. Restarting the game");
-//         std::thread::sleep(std::time::Duration::from_secs(2));
-//     }
-//     // env.run()?;
-//     // println!("Hello, world!");
-//     Ok(())
-// }
-
 fn bit_not(x: Num) -> Num {
     !x & Num::MAX
 }
-// #[test]
-// fn repl() {
-//     let a=u15::MAX;
-//     let b: u15 = 0b001.into();
-//     let c = !b;
-//     let d = bit_not(b);
-//     println!("a: {}, b: {}, c: {}, d: {}", a, b, c, d);
-//     assert!(false);
-// }
+
 #[test]
 fn register_finder() {
 	let values = [
@@ -698,6 +778,7 @@ fn register_finder() {
 	];
     let bytes = include_bytes!("../challenge.bin");
 	let (mut s1, mut s2) = Screen::create();
+	// for register_val in 32768..u16::MAX {
 	for register_val in 1..32768 {
 	// for register_val in 1..3 {
 		s1.reset().unwrap();
@@ -710,7 +791,10 @@ fn register_finder() {
 		// s2.send(val)
 		dbg!(register_val);
 		match ev.check_teleporter() {
-			Ok(x) => { assert!(!x); },
+			Ok(x) => {
+                assert!(s2.get_all().unwrap().contains("Unusual"));
+                assert!(!x);
+            },
 			Err(x) => unreachable!()
 		};
 		s1 = ev.screen;
@@ -769,28 +853,31 @@ fn register_finder2() {
 		"use corroded coin",
 		"north",
 		"take teleporter",
-		"use teleporter",
 	];
+
     let bytes = include_bytes!("../challenge.bin");
 	let (mut s1, mut s2) = Screen::create();
-	for register_val in 16000..32768 {
-	// for register_val in 1..3 {
-		s1.reset().unwrap();
-		let mut ev = ExecutionEnv::new(bytes, s1, Some(register_val));
-		for k in &values {
-			let mut s = k.to_string();
-			s.push('\n');
-			s2.send(s).unwrap();
-		}
-		// s2.send(val)
-		dbg!(register_val);
-		match ev.check_teleporter() {
-			Ok(x) => { assert!(!x); },
-			Err(x) => unreachable!()
-		};
-		s1 = ev.screen;
+	// for register_val in 16000..32768 {
+	s1.reset().unwrap();
+	let mut ev = ExecutionEnv::new(bytes, s1, None);
+	for k in &values {
+		let mut s = k.to_string();
+		s.push('\n');
+		s2.send(s).unwrap();
 	}
+	// s2.send(val)
+	// dbg!(register_val);
+	match ev.run_until_empty() {
+		Ok(x) => { assert!(!x); },
+		Err(x) => unreachable!()
+	};
+	let mut f = std::fs::File::create("/tmp/snapshot.json").unwrap();
+	let x = ev.snapshot().to_json();
+	f.write_all(x.as_bytes()).unwrap();
+	// s1 = ev.screen;
+	// }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
