@@ -1,4 +1,5 @@
 use core::num;
+use std::collections::{VecDeque, HashSet, BTreeSet};
 use std::sync::mpsc::TryRecvError;
 use std::{ops::Mul, sync::mpsc::Receiver};
 use std::fs::File;
@@ -34,7 +35,7 @@ fn wrapping_mod(a: Num, b: Num) -> Num {
     (a_u16%b_u16).try_into().unwrap()
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Clone)]
 pub struct EnvSnapshot {
     pub(crate) stack: Vec<MemBlock>,
     // pub(crate) memory: [MemBlock; 32768],
@@ -134,6 +135,10 @@ impl Screen {
         // }
         // Ok(self.buffer.pop().unwrap())
     }
+    // pub fn drain(count: usize) -> anyhow::Result<()> {
+    //     self.try_get_char()
+
+    // }
     pub fn try_get_char(&mut self) -> anyhow::Result<Option<char>> {
         while self.buffer.is_empty() {
             match self.text_recv.try_recv() {
@@ -294,13 +299,18 @@ impl ExecutionEnv {
 
         self.operation_count += 1;
         
-        eprintln!("OPERATION: {:?}", &op);
-        eprintln!("MemoryAddr: {:?}", &self.curr_point);
-        eprintln!("Registers: {:?}", &self.registers);
+        // eprintln!("OPERATION: {:?}", &op);
+        // eprintln!("MemoryAddr: {:?}", &self.curr_point);
+        // eprintln!("Registers: {:?}", &self.registers);
         // eprintln!("Count: {:?}", &self.operation_count);
         // Bypass teleporter confirmation
         if self.curr_point == 6027u16.try_into().unwrap() {
             op = Op::Ret;
+        }
+        if self.operation_count == 701400 {
+            if let Some(x) = self.register_8_preset {
+                self.registers[7] = x;
+            }
         }
 
         // if op == Mem
@@ -430,9 +440,9 @@ impl ExecutionEnv {
                 }
             },
             In(x) => {
-				if let Some(x) = self.register_8_preset {
-					self.registers[7] = x;
-				}
+				// if let Some(x) = self.register_8_preset {
+				// 	self.registers[7] = x;
+				// }
                 let v = self.screen.get_char()?;
                 self.set_mem(*x, v as u16)?;
             }
@@ -773,7 +783,7 @@ fn register_finder4() {
 }
 
 fn run_test_fr(preset: u16) -> ExecutionEnv {
-    dbg!(preset);
+    // dbg!(preset);
 	let values = [
 		"take tablet",
 		"doorway",
@@ -837,10 +847,45 @@ fn run_test_fr(preset: u16) -> ExecutionEnv {
         s2.send(s).unwrap();
     }
 
-    match ev.run_until_condition(|s| s.curr_point == 6027u16.try_into().unwrap()) {
+    // std::thread::sp
+    // let end_point = 873145;
+    // match ev.run_until_condition(|s| s.operation_count == 873145) {
+    //     Ok(x) => { },
+    //     Err(x) => unreachable!()
+    // };
+    let mut should_shout = false;
+    match ev.run_until_empty() {
         Ok(x) => { },
-        Err(x) => unreachable!()
+        Err(x) => {
+            should_shout = true;
+        }
     };
+
+    // Drain unnecessary chars
+    for i in 0..9508 {
+        s2.try_get_char().unwrap();
+    }
+    let mut r = String::new();
+    while let Some(x) = s2.try_get_char().unwrap() {
+        r.push(x);
+    }
+
+    if r.find("Miscalibration detected!  Aborting teleportation!").is_none()  {
+            should_shout = true;
+    }
+
+    if should_shout {
+        loop {
+            println!("=========================================== Found it: {}", preset);
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    } else {
+        if preset %100 == 0 {
+            // ev.operation_count += 1;
+            println!("Nope, no luck: {}", preset);
+        }
+    }
+
     ev
 }
 
@@ -933,25 +978,87 @@ fn register_finder5() {
 	}
 }
 
+// fn get_snapshot_for()
 #[test]
 fn register_finder6() {
-    let mut a = threadpool::ThreadPool::new(14);
+	let values = [ "take tablet", "doorway", "north", "north", "bridge", "continue", "down", "east", "take empty lantern", "west", "west", "passage", "ladder", "west",
+		"south", "north", "take can", "west", "use can", "use lantern", "ladder", "darkness", "continue",
+		"west", "west", "west", "west", "north", "take red coin", "north", "east", "take concave coin", "down",
+		"take corroded coin", "up", "west", "west", "take blue coin", "up", "take shiny coin", "down",
+		"east", "use blue coin", "use red coin", "use shiny coin", "use concave coin", "use corroded coin",
+		"north", "take teleporter", "use teleporter"];
+
+    let mut a = threadpool::ThreadPool::new(12);
     let u15_max: u16 = u15::MAX.into();
-    let value = run_test_fr(1).operation_count;
-    // let value = run_test_fr(1);
-    let (mut tx, rx) = std::sync::mpsc::channel();
-    // for i in 0..(u15_max) {
-    for i in 1..u16::MAX {
-        let t = tx.clone();
+    // let value = run_test_fr(1).operation_count;
+	let (mut s1, mut s2) = Screen::create();
+    let bytes = include_bytes!("../challenge.bin");
+    let mut ev = ExecutionEnv::new(bytes, s1, Some(1));
+    for x in &values[..values.len()-1] {
+        s2.send(format!("{x}\n")).unwrap();
+    }
+    ev.run_until_empty().unwrap();
+    let snap = ev.snapshot();
+    let snap_ref: &'static EnvSnapshot = Box::leak(Box::new(snap));
+
+
+
+
+    let (mut pr_tx, pr_rx) = std::sync::mpsc::channel();
+    
+    let range = 1..=u16::MAX;
+    let range = (1..=u16::MAX).rev();
+    let mut all_to_wait = BTreeSet::from_iter(range.clone());
+    for i in range {
+        // let t = tx.clone();
+        let pr_tx = pr_tx.clone();
         a.execute(move || {
-            if run_test_fr(i).operation_count != value {
-                t.send(i).unwrap();
+            let (s1, mut s2) = Screen::create();
+            let mut env = snap_ref.to_env(s1).unwrap();
+            env.registers[7] = i;
+            s2.send("use teleporter\n".to_string()).unwrap();
+            env.run_until_empty().unwrap();
+            // for i in 0..9508 {
+            //     s2.try_get_char().unwrap();
+            // }
+            let mut r = String::new();
+            while let Some(x) = s2.try_get_char().unwrap() {
+                r.push(x);
             }
+            // dbg!(r.len());
+            let mut should_shout = r.len() != 332;
+            // dbg!(r);
+            if r.find("Miscalibration detected!  Aborting teleportation!").is_none()  {
+                    should_shout = true;
+            }
+            if should_shout {
+                loop {
+                    println!("=========================================== Found it: {}", i);
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+            } else {
+                if i %100 == 0 {
+                    // ev.operation_count += 1;
+                    println!("Nope, no luck: {}", i);
+                }
+            }
+
+            // if run_test_fr(i).operation_count != value {
+            //     loop {
+            //         std::thread::sleep(std::time::Duration::from_millis(10));
+            //         println!("============= Wrong value: {}", i);
+            //     }
+            //     t.send(i).unwrap();
+            // }
+            // pr_tx.send(i).unwrap();
         });
     }
     loop {
-        let v = dbg!(rx.recv().unwrap());
-        assert!(false, "val: {}", v);
+        let v = pr_rx.recv().unwrap();
+        assert!(all_to_wait.remove(&v));
+        // dbg!(all_to_wait.first(), all_to_wait.len());
+        // let v = dbg!(rx.recv().unwrap());
+        // assert!(false, "val: {}", v);
     }
     a.join();
     println!("--------------------- Waiting");
