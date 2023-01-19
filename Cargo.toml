@@ -7,9 +7,11 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.68"
+bytemuck = "1.12.3"
 ctrlc = "3.2.4"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.91"
+threadpool = "1.8.1"
 ux = { path = "./uX", features=["std"] }
 
 [workspace]

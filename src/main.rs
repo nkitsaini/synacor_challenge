@@ -3,6 +3,9 @@ use std::{sync::{Mutex, Arc}, process::exit};
 use vm::{Screen, EnvSnapshot};
 
 mod vm;
+mod op_parser;
+mod reverse_engineer;
+// mod reverse_engineer;
 
 trait Player {
     fn play(&mut self, screen: Screen) -> anyhow::Result<()>;
@@ -76,6 +79,8 @@ fn run(env_snap: EnvSnapshot) -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     let bytes = include_bytes!("../challenge.bin");
+    // reverse_engineer::parse(bytes)?;
+    // return Ok(());
     let (mut env_screen, screen) = vm::Screen::create();
 
     let screen_recv = screen.text_recv;
