@@ -4,6 +4,24 @@ north
 north
 north
 north
+north
+north
+north
+north
+north
+take orb
+
+
+
+
+
+
+
+
+
+
+----------------------------------------
+
 
 o
 5605 -> location of code for default teleport
