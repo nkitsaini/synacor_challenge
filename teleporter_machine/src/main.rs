@@ -79,7 +79,8 @@ fn run(registers: &mut [u16; 8]) {
 
 fn run_for_present(val: u16) -> [u16; 3] {
     // let mut registers = [4, 5445, 3, 10, 101, 0, 0, i];
-    let mut registers = [4, 5445, val];
+    // let mut registers = [4, 5445, val];
+    let mut registers = [4, 1, val];
     // let mut cache = Default::default();
     let mut cache = Default::default();
     run_cached(&mut registers, &mut cache);
@@ -88,7 +89,6 @@ fn run_for_present(val: u16) -> [u16; 3] {
 
 fn main() {
     // let pool = threadpool::ThreadPool::new(1);
-    // let mut pool = threadpool::Builder::new().num_threads(12).thread_stack_size(64_000_000).build();
     // let a= std::thread::spawn(|| {
     //     dbg!(run_for_present(1));
     // });
@@ -97,10 +97,23 @@ fn main() {
     // 27285
     // 27286
     // 28000
-    for i in 1..=u16::MAX {
+    // Was using wrong register values: :'(
+    //   First: 816
+    //   Second: 2468
+    //   Third: 9008
+    //   forth: 10660
+    //   forth: 17200
+    //   forth: 18852
+    //   23686
+    //   25392
+    //   27044
+    // let mut pool = threadpool::Builder::new().num_threads(12).thread_stack_size(64_000_000).build();
+    // final, solved, done, finish: 25734 :D
+    let mut pool = threadpool::Builder::new().num_threads(12).build();
+    for i in 27284..=u16::MAX {
     // for i in 27284..=u16::MAX {
     // for i in 20..25 {
-        // pool.execute(move || {
+        pool.execute(move || {
             // dbg!(i);
             let rv = run_for_present(i);
 
@@ -108,11 +121,11 @@ fn main() {
             // dbg!("Done", i);
             if rv[0] == 6 {
                 loop {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
                     println!("Found: {}", i);
+                    std::thread::sleep(std::time::Duration::from_millis(10000));
                 }
             }
-        // });
+        });
     }
     // pool.join();
 

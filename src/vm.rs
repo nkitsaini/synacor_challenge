@@ -299,14 +299,14 @@ impl ExecutionEnv {
 
         self.operation_count += 1;
 
-        eprintln!("OPERATION: {:?}", &op);
-        eprintln!("MemoryAddr: {}", &self.curr_point);
-        eprintln!("Registers: {:?}", &self.registers);
-        eprintln!("Count: {}", &self.operation_count);
+        // eprintln!("OPERATION: {:?}", &op);
+        // eprintln!("MemoryAddr: {}", &self.curr_point);
+        // eprintln!("Registers: {:?}", &self.registers);
+        // eprintln!("Count: {}", &self.operation_count);
         // Bypass teleporter confirmation
         if self.curr_point == 6027u16.try_into().unwrap() {
             self.registers[0] = 6;
-            self.registers[1] = 5;
+            self.registers[1] = 4;
             // self.registers[1] = 5;
             // self.registers[0] = 2708;
             // self.registers[1] = 5445;

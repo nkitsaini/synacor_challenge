@@ -1,7 +1,77 @@
 9 + 2 * 5 ^2 + 7 ^3 - 3 = 399
+# 8th:
+north
+north
+north
+north
 
 o
 5605 -> location of code for default teleport
+
+1.GxrbCcIPVxwa
+2.rmOoHjBoQSdF
+3.NMtSJynaTUzs
+Invalids:
+	7.(816)hLuCAbTpUYiN
+	7.(2468)JbuycLfBAgSN
+	7.(9008)FjSeczvRwwKl
+	7.(10660)hzSaEjHdcEul
+	7.(17200)dHqyEXXtYUmJ
+	7.(18852)FXqugHjFEcWJ
+	8.(23686)XFUIydJXqOAT
+	7.(25392)BfOagvzVAsOh
+	7.(27044)--Invalid--
+
+take tablet
+doorway
+north
+north
+bridge
+continue
+down
+east
+take empty lantern
+west
+west
+passage
+ladder
+west
+south
+north
+take can
+west
+use can
+use lantern
+ladder
+darkness
+continue
+west
+west
+west
+west
+north
+take red coin
+north
+east
+take concave coin
+down
+take corroded coin
+up
+west
+west
+take blue coin
+up
+take shiny coin
+down
+east
+use blue coin
+use red coin
+use shiny coin
+use concave coin
+use corroded coin
+north
+take teleporter
+use teleporter
 
 take tablet
 doorway

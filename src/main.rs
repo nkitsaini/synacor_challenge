@@ -118,7 +118,7 @@ fn main() -> anyhow::Result<()> {
         history.lock().unwrap().clear();
         // let mut env = vm::ExecutionEnv::new(bytes, env_screen, None);
         // let mut env = vm::ExecutionEnv::new(bytes, env_screen, Some(1));
-        let mut env = vm::ExecutionEnv::new(bytes, env_screen, Some(816));
+        let mut env = vm::ExecutionEnv::new(bytes, env_screen, Some(25734));
         env.run()?;
         env_screen = env.screen;
         std::thread::sleep(std::time::Duration::from_millis(100));
