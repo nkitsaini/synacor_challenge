@@ -17,5 +17,6 @@ ux = { path = "./uX", features=["std"] }
 [workspace]
 members = [
 	".",
-	"uX"
+	"uX",
+	"teleporter_machine"
 ]
