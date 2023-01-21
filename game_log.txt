@@ -1,15 +1,7 @@
 9 + 2 * 5 ^2 + 7 ^3 - 3 = 399
-# 8th:
-north
-north
-north
-north
-north
-north
-north
-north
-north
-take orb
+
+8th:
+22 + 4 * 8 - 1 30, 1, 11, -, 9
 
 
 
