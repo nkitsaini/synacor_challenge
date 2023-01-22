@@ -1,11 +1,45 @@
 9 + 2 * 5 ^2 + 7 ^3 - 3 = 399
 
+
 8th:
-22 + 4 * 8 - 1 30, 1, 11, -, 9
+31 = (22 + 4*(2)) *8 - 11*(19)
+- Go all north (shuffle between north/south for +4)
+- go to east until `-`
+- shuffle between south/north (for -11)
+- go to vault (31-1 = 30)
+* Still orb disappears (Maybe need to go through different route?)
 
 
+route1: north -> north -> north -> east -> east -> vault
+route2: north -> east -> east -> east -> north -> north  -> vault
+route3: east -> east -> east -> north -> north -> north -> vault
+
+					
+					
+					
+	blocked	blocked	blocked	blocked	
+blocked	(*) vault lock	(8) vault lock	(-) vault lock	(1) =30 Vault	blocked
+blocked	(4) vault lock	(*) vault lock	(11) vault lock	(*) vault lock	blocked
+blocked	(+) vault lock	(4) vault lock	(-) vault lock	(18) vault lock	blocked
+blocked	vault antechamb	(-) vault lock	(9) vault lock	(*) vault lock	blocked
+	journal	blocked	blocked	blocked	
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach				
+	beach
 
 
+Map of area: https://docs.google.com/spreadsheets/d/14ZfBtyluGBadAAkNpp1KXg7xqLKfPS6V8ZnH5Lck4aI/edit#gid=0
+markdown: ./map.md
 
 
 

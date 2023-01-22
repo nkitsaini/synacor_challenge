@@ -466,6 +466,9 @@ impl StaticExecuter {
     pub fn get_history(&self) -> Vec<String> {
         self.history.clone()
     }
+    pub fn is_finished(&self) -> bool {
+        self.ended
+    }
 
     pub fn new_from_checkpoint(history: Vec<String>) -> anyhow::Result<Self> {
         let mut rv = Self::new();
