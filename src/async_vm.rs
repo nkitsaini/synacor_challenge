@@ -1,7 +1,7 @@
 use core::num;
 use std::collections::{VecDeque, HashSet, BTreeSet};
 use std::sync::mpsc::TryRecvError;
-use std::{ops::Mul, sync::mpsc::Receiver};
+use std::ops::Mul;
 use std::fs::File;
 use std::io::prelude::*;
 use serde::{Serialize, Deserialize};
@@ -87,15 +87,15 @@ pub struct ExecutionEnv {
 }
 
 pub struct Screen {
-    pub(crate) text_recv: std::sync::mpsc::Receiver<String>,
-    pub(crate) text_send: std::sync::mpsc::Sender<String>,
+    pub(crate) text_recv: tokio::sync::mpsc::UnboundedReceiver<String>,
+    pub(crate) text_send: tokio::sync::mpsc::UnboundedSender<String>,
     pub(crate) buffer: String
 }
 
 impl Screen {
     pub fn create() -> (Screen, Screen) {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let (tx2, rx2) = std::sync::mpsc::channel();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        let (tx2, rx2) = tokio::sync::mpsc::unbounded_channel();
         return (Screen{text_recv: rx, text_send: tx2, buffer: "".into()}, Screen{text_recv: rx2, text_send: tx, buffer: "".into()})
     }
     pub fn send(&mut self, val: String) -> anyhow::Result<()> {
@@ -106,9 +106,9 @@ impl Screen {
         self.text_send.send(val.to_string())?;
         Ok(())
     }
-    pub fn get_char(&mut self) -> anyhow::Result<char> {
+    pub async fn get_char(&mut self) -> anyhow::Result<char> {
         while self.buffer.is_empty() {
-            let data = self.text_recv.recv()?;
+            let data = self.text_recv.recv().await.context("MPSC died")?;
             self.buffer = data.chars().rev().collect();
         }
         Ok(self.buffer.pop().unwrap())
@@ -117,10 +117,10 @@ impl Screen {
         let mut rv = self.buffer.clone();
         loop {
             match self.text_recv.try_recv() {
-                Err(TryRecvError::Disconnected) => {
+                Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
                     bail!("Disconnected screen get");
                 },
-                Err(TryRecvError::Empty) => {
+                Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
                     self.buffer = "".to_string();
                     return Ok(rv)
                 }
@@ -135,17 +135,13 @@ impl Screen {
         // }
         // Ok(self.buffer.pop().unwrap())
     }
-    // pub fn drain(count: usize) -> anyhow::Result<()> {
-    //     self.try_get_char()
-
-    // }
     pub fn try_get_char(&mut self) -> anyhow::Result<Option<char>> {
         while self.buffer.is_empty() {
             match self.text_recv.try_recv() {
-				Err(TryRecvError::Disconnected) => {
+				Err(tokio::sync::mpsc::error::TryRecvError::Disconnected) => {
 					bail!("Disconnected screen get");
 				},
-				Err(TryRecvError::Empty) => {
+				Err(tokio::sync::mpsc::error::TryRecvError::Empty) => {
 					return Ok(None)
 				}
 				Ok(x) => {
@@ -196,7 +192,7 @@ impl ExecutionEnv {
 		EnvSnapshot::new(self)
 	}
 
-    pub fn run(&mut self) -> anyhow::Result<()> {
+    pub async fn run(&mut self) -> anyhow::Result<()> {
         loop {
             let mut values = [0u16; 4];
             for i in (self.curr_point.to_usize())
@@ -205,7 +201,7 @@ impl ExecutionEnv {
                 values[i - self.curr_point.to_usize()] = self.memory[i];
             }
             let op = Op::parse(&self.memory[self.curr_point.to_usize()..self.curr_point.to_usize()+4])?;
-            if self.run_op(op)? {
+            if self.run_op(op).await? {
                 break
             };
         }
@@ -235,60 +231,8 @@ impl ExecutionEnv {
         }
         Ok(())
     }
-	
-    pub fn check_teleporter(&mut self) -> anyhow::Result<bool> {
-        loop {
-            let mut values = [0u16; 4];
-            for i in (self.curr_point.to_usize())
-                ..(self.memory.len().min(self.curr_point.to_usize() + 4))
-            {
-                values[i - self.curr_point.to_usize()] = self.memory[i];
-            }
-            let op = Op::parse(&self.memory[self.curr_point.to_usize()..self.curr_point.to_usize()+4])?;
-			if let Op::Call(x) = &op {
-				if let Val::Num(a) = *x {
-					let b: u16 = a.into();
-					if b == 6027 {
-						return Ok(false);
-					}
-				}
-			}
-            if self.run_op(op)? {
-				break
-            };
-        }
-        Ok(false)
-    }
 
-    pub fn run_until_condition(&mut self, condition: fn(&ExecutionEnv) -> bool) -> anyhow::Result<()> {
-        loop {
-            let op = Op::parse(&self.memory[self.curr_point.to_usize()..self.curr_point.to_usize()+4])?;
-            if self.run_op(op)? {
-                break
-            };
-            if condition(self) {
-                break
-            }
-        }
-        Ok(())
-
-    }
-
-    pub fn run_until_empty(&mut self) -> anyhow::Result<bool> {
-        loop {
-            let op = Op::parse(&self.memory[self.curr_point.to_usize()..self.curr_point.to_usize()+4])?;
-			if let Op::In(_) = &op {
-				if self.screen.is_empty()? {
-					return Ok(false);
-				}
-			}
-            if self.run_op(op)? {
-                return Ok(true)
-            };
-        }
-    }
-
-    fn run_op(&mut self, mut op: Op) -> anyhow::Result<bool> {
+    async fn run_op(&mut self, mut op: Op) -> anyhow::Result<bool> {
         use Op::*;
         let mut jump_pos: Option<Mem> = None;
 
@@ -425,7 +369,7 @@ impl ExecutionEnv {
 				// if let Some(x) = self.register_8_preset {
 				// 	self.registers[7] = x;
 				// }
-                let v = self.screen.get_char()?;
+                let v = self.screen.get_char().await?;
                 self.set_mem(*x, v as u16)?;
             }
 
@@ -442,44 +386,6 @@ impl ExecutionEnv {
 
         return Ok(false);
     }
-}
-
-
-pub struct StaticExecuter {
-    env: ExecutionEnv,
-    env_screen: Screen,
-    ended: bool
-}
-
-impl StaticExecuter {
-    // fn new(content: &[u8]) -> Self {
-    pub fn new() -> Self {
-        let bytes = include_bytes!("../challenge.bin");
-        let (s1, s2) = Screen::create();
-        Self {
-            env: ExecutionEnv::new(bytes, s1, Some(25734)),
-            env_screen: s2,
-            ended: false
-        }
-    }
-    pub fn bootstrap(&mut self) -> anyhow::Result<String> {
-        self.env.run_until_empty()?;
-        let rv = self.env_screen.get_all()?;
-        Ok(rv)
-    }
-    pub fn execute(&mut self, command: String) -> anyhow::Result<Option<String>> {
-        if self.ended {
-            return Ok(None);
-        }
-        // dbg!("Executing", &command);
-        self.env_screen.send(command)?;
-        if self.env.run_until_empty()? {
-            self.ended = true;
-        };
-        let rv = self.env_screen.get_all()?;
-        Ok(Some(rv))
-    }
-
 }
 
 fn bit_not(x: Num) -> Num {

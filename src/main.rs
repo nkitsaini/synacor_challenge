@@ -1,8 +1,10 @@
 use std::{sync::{Mutex, Arc}, process::exit, io::{Write, Read}, path::PathBuf};
 
-use vm::{Screen, EnvSnapshot};
+use vm::{Screen, EnvSnapshot, StaticExecuter};
 use clap::Parser;
 
+// mod async_vm;
+// mod vm_runner;
 mod vm;
 mod op_parser;
 mod reverse_engineer;
@@ -104,6 +106,23 @@ fn run(env_snap: EnvSnapshot) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
+    loop {
+        let mut executer = StaticExecuter::new();
+        print!("{}", executer.bootstrap()?);
+
+        loop {
+            let mut cmd = "".into();
+            std::io::stdin().read_line(&mut cmd)?;
+            match executer.execute(cmd)? {
+                None => break,
+                Some(x) => print!("{x}")
+            }
+        }
+        println!("=========== Restarting")
+    }
+    Ok(())
+}
+fn main1() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let bytes = include_bytes!("../challenge.bin");
