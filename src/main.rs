@@ -106,16 +106,47 @@ fn run(env_snap: EnvSnapshot) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+    let mut replay_codes = vec![];
+    if let Some(cp) = args.checkpoint {
+        let mut buf = vec![];
+        std::fs::File::open(cp).unwrap().read_to_end(&mut buf).unwrap();
+        let x: Vec<String> = serde_json::from_slice(&buf).unwrap();
+        replay_codes = x;
+    }
+
     loop {
-        let mut executer = StaticExecuter::new();
+        let mut executer = StaticExecuter::new_from_checkpoint(replay_codes.clone())?;
         print!("{}", executer.bootstrap()?);
 
         loop {
             let mut cmd = "".into();
             std::io::stdin().read_line(&mut cmd)?;
-            match executer.execute(cmd)? {
-                None => break,
-                Some(x) => print!("{x}")
+            if cmd.starts_with("save") {
+                cmd = cmd.trim().to_string();
+                match cmd.strip_prefix("save ") {
+                    None => {println!(">> Usage: save <file_path>");},
+                    Some(x) => {
+                        let replays = serde_json::to_string_pretty(&executer.get_history()).unwrap();
+                        match std::fs::File::create(x) {
+                            Ok(mut f) => {
+                                if let Err(x) = f.write_all(replays.as_bytes()) {
+                                    println!(">> Error: {:?}", x);
+                                } else {
+                                    println!(">> Successfully Written To: {:?}", x);
+                                };
+                            },
+                            Err(x) => {
+                                println!(">> Error: {:?}", x);
+                            }
+                        }
+                    }
+                }
+            } else {
+                match executer.execute(cmd)? {
+                    None => break,
+                    Some(x) => print!("{x}")
+                }
             }
         }
         println!("=========== Restarting")

@@ -448,19 +448,32 @@ impl ExecutionEnv {
 pub struct StaticExecuter {
     env: ExecutionEnv,
     env_screen: Screen,
+    history: Vec<String>,
     ended: bool
 }
 
 impl StaticExecuter {
-    // fn new(content: &[u8]) -> Self {
     pub fn new() -> Self {
         let bytes = include_bytes!("../challenge.bin");
         let (s1, s2) = Screen::create();
         Self {
             env: ExecutionEnv::new(bytes, s1, Some(25734)),
             env_screen: s2,
-            ended: false
+            ended: false,
+            history: Vec::new()
         }
+    }
+    pub fn get_history(&self) -> Vec<String> {
+        self.history.clone()
+    }
+
+    pub fn new_from_checkpoint(history: Vec<String>) -> anyhow::Result<Self> {
+        let mut rv = Self::new();
+        for s in history.iter() {
+            rv.env_screen.send(s.to_string())?;
+        }
+        rv.history = history;
+        Ok(rv)
     }
     pub fn bootstrap(&mut self) -> anyhow::Result<String> {
         self.env.run_until_empty()?;
@@ -471,7 +484,7 @@ impl StaticExecuter {
         if self.ended {
             return Ok(None);
         }
-        // dbg!("Executing", &command);
+        self.history.push(command.clone());
         self.env_screen.send(command)?;
         if self.env.run_until_empty()? {
             self.ended = true;
