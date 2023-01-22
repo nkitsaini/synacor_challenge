@@ -292,6 +292,11 @@ impl ExecutionEnv {
         use Op::*;
         let mut jump_pos: Option<Mem> = None;
 
+        // eprintln!("Registers: {:?}", self.registers);
+        // eprintln!("Operation: {:?}", op);
+        // eprintln!("Memory: {}", self.curr_point);
+        // eprintln!("Count: {}", self.operation_count);
+
         self.operation_count += 1;
 
         if self.curr_point == 6027u16.try_into().unwrap() {
@@ -304,6 +309,9 @@ impl ExecutionEnv {
                 self.registers[7] = x;
             }
         }
+        // if self.operation_count == 1168280 {
+        //     self.registers[3] = 0;
+        // }
 
         match &op {
             Halt => {return Ok(true);},

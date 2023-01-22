@@ -31,6 +31,22 @@ def get_value(path: List[Tuple[int, int]]) -> int:
 		current = update_val(current, prev_pos, pos)
 	return current
 
+# def get_value(path: List[Tuple[int, int]]) -> int:
+# 	current = 22
+# 	eval_str = ""
+# 	last_op = MAP[path[-1][0]][path[-1][1]]
+# 	if isinstance(last_op, str):
+# 		if last_op[0] == '=':
+# 			return 22
+# 		else:
+# 			return get_value(path[:-1])
+
+# 	for pos in path[1:]:
+# 		eval_str += str(MAP[pos[0]][pos[1]]) + " "
+
+# 	return eval(f"{current} {eval_str}")
+		
+# 	return current
 
 def find_best_path():
 	current = [(22, (START, None),)]
@@ -46,6 +62,8 @@ def find_best_path():
 				if not (0 <= new_x < 4):
 					continue
 				if not (0 <= new_y < 4):
+					continue
+				if new_pos == START:
 					continue
 				# new_value = update_val(old_value, old_loc, (new_x, new_y))
 				new_value = get_value([x for x, name in old_entry[1:]] + [(new_x, new_y)])

@@ -1,6 +1,7 @@
 use std::{sync::{Mutex, Arc}, process::exit, io::{Write, Read}, path::PathBuf};
 
 use anyhow::bail;
+use either::*;
 use vm::StaticExecuter;
 use clap::Parser;
 
@@ -89,7 +90,8 @@ impl Command {
 struct GameState {
     inventory: Vec<String>,
     orb_weight: usize,
-    last_symbol: Option<char>
+    last_symbol: Option<char>,
+    path_history: Vec<Either<char, usize>>
 }
 
 impl GameState {
@@ -125,6 +127,7 @@ impl GameState {
         // When the orb evaporates (or we drop it)
         if !contains_orb {
             self.orb_weight = 0;
+            self.path_history.clear();
             self.last_symbol.take();
         }
 
@@ -132,6 +135,7 @@ impl GameState {
         // When we take the orb (and previously it was zero i.e. not present)
         if contains_orb && self.orb_weight == 0 {
             self.orb_weight = 22;
+            self.path_history.push(Right(22));
         }
         if !contains_orb {
             return
@@ -149,6 +153,7 @@ impl GameState {
             } else {
                 unreachable!()
             }
+            self.path_history.push(Left(self.last_symbol.unwrap()));
         }
 
         // Orb weight (Number) 
@@ -169,6 +174,7 @@ impl GameState {
                 },
                 x => panic!("Unreachable State with previous sign: {:?}", x)
             }
+            self.path_history.push(Right(num));
             self.last_symbol.take();
 
         }
@@ -179,6 +185,7 @@ impl GameState {
         println!("---------------==================---------------- ");
         println!("-- Inventory: {:?}", self.inventory);
         println!("-- Orb Weight: {:?}", self.orb_weight);
+        println!("-- History: {:?}", self.path_history);
         if let Some(x) = self.last_symbol {
             println!("-- Sign: {:?}", x);
         }
